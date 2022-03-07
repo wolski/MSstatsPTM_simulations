@@ -1,0 +1,545 @@
+---
+title: "MSstatsPTM Simulation Analysis"
+author: "Devon Kohler"
+date: "3/7/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_packages}
+library(MSstatsPTM)
+library(data.table)
+library(tidyverse)
+```
+
+
+```{r function, include=FALSE}
+
+## Define metrics
+calculate_summary_stats <- function(df, protein_col_name, pval_col_name, sd, rep, conditions){
+  fpr <- df %>% filter(get(pval_col_name) < .05 & grepl("NoChange", get(protein_col_name))) %>% 
+    nrow() / nrow(df %>% filter(get(pval_col_name) < .05))
+  sensitivity <- df %>% filter(get(pval_col_name) < .05 & !grepl("NoChange", get(protein_col_name))) %>% 
+    nrow() / nrow(df %>% filter(!grepl("NoChange", get(protein_col_name))))
+  specificity <- df %>% filter(get(pval_col_name) >= .05 & grepl("NoChange", get(protein_col_name))) %>% 
+    nrow() / nrow(df %>% filter(grepl("NoChange", get(protein_col_name))))
+  precision <- df %>% filter(get(pval_col_name) < .05 & !grepl("NoChange", get(protein_col_name))) %>% 
+    nrow() / nrow(df %>% filter(get(pval_col_name) < .05))
+  accuracy <- df %>% filter((get(pval_col_name) < .05 & !grepl("NoChange", get(protein_col_name))) | 
+                              (get(pval_col_name) >= .05 & grepl("NoChange", get(protein_col_name)))) %>% 
+    nrow() / nrow(df)
+  recall <- df %>% filter(get(pval_col_name) < .05 & !grepl("NoChange", get(protein_col_name))) %>% 
+    nrow() / df %>% filter(!grepl("NoChange", get(protein_col_name))) %>% nrow()
+  results_temp <- data.table(fpr = fpr, sensitivity = sensitivity, 
+                             specificity = specificity, precision = precision, 
+                             sd = sd, rep = rep, conditions = conditions,
+                             accuracy = accuracy, recall = recall)
+  return(results_temp)
+}
+
+```
+
+## Computer Simulation
+
+### Simulation Methods
+
+To simulate data the `PTMsimulateExperiment()` function was used. This function allows us to vary the number of conditions, replicates, number of proteins, number of sites per protein, number of spectral features per site/protein, mean log2-abundance of PTM and PROTEIN, deviation from the mean log2-abundance in each group, standard deviation among replicates, and standard deviation among log2-intensities.
+
+Three different statistical modeling methods were applied to the simulated data: MSstatsPTM, limma, and two-sample t-test. These methods were tested both with and without applying protein level adjustment. MSstatsPTM uses TMP for summarization and post modeling calculations for the adjustment. To adjust limma and t-test, the run-level data was averaged for both ptm and protein datasets and then combined. The resulting dataset was then used for limma and t-test.
+
+Graphs can help us visualize the components of the simulation.
+
+```{r, echo=FALSE}
+data.frame(ConditionA = rnorm(1000000, 22,2), ConditionB = rnorm(1000000, 17,2)) %>% ggplot() + 
+  geom_density(aes(ConditionA), fill = "coral1") + geom_density(aes(ConditionB), fill = "steelblue1") +
+  geom_vline(aes(xintercept=24), size = 1.25, color = "red") + 
+  labs(title = "PTM1 between Condition A and B", x = "Abundance")
+```
+
+
+Here we can see a sample PTM with two conditions A and B. The red line represents a same biological replicate. We can simulate different variance's for the conditions.
+
+**All charts are made using adjusted pvalue <.05 to designate a significant hit.**
+
+### Simulation 1
+
+All simulations were ran with half the PTMs being differential, while the other half the difference was due to changes in global protein level. The first simulation is run with the following parameters:
+
+* Mean of log-intensity: $25$
+* Number of Features: $10$ (PTM), $10$ (Protein)
+* Standard deviations of log-intensities for modified and unmodified peptides: $0.2$, $0.3$
+* Difference in PTM abundance between conditions: $0$, $0.5$, $0.75$, $1$
+* Difference in protein abundance between conditions: $0$, $0.5$
+* Number of replicates: $3$, $4$, $5$
+* Number of conditions: $2$, $3$, $4$
+* Number of realizations: $500$
+
+``` {r first_sim_data, include = FALSE}
+
+load(file = "../data/ptm_models_sim1.rda")#ptm_models_sim1
+load(file = "../data/adjusted_models_sim1.rda")#adjusted_models_sim1 
+load(file = "../data/ttest_models_sim1.rda")#ttest_sim1
+load(file = "../data/adj_ttest_models_sim1.rda")#adj_ttest_sim1
+load(file = "../data/limma_models_sim1.rda")#limma_results_sim1
+load(file = "../data/adj_limma_models_sim1.rda")#adj_limma_sim1
+
+s <- c(.2,.3)
+reps <- c(2,3,5,10)
+cond <- c(2,3,4)
+param_combos <- expand.grid(s, reps, cond)
+
+no_adj_results <- data.table()
+adj_results <- data.table()
+ttest_results <- data.table()
+ttest_adj_results <- data.table()
+limma_model_results <- data.table()
+limma_adj_model_results <- data.table()
+
+## Calculate results
+## Calculate metrics for each model and dataset
+for (i in seq_along(ptm_models_sim1)){
+  
+  no_adj_results_temp <- calculate_summary_stats(ptm_models_sim1[[i]], c("Protein"),  c("pvalue"), param_combos[i, 1], 
+                                                 param_combos[i, 2], param_combos[i, 3])
+  no_adj_results <- rbindlist(list(no_adj_results, no_adj_results_temp))
+  
+  adj_results_temp <- calculate_summary_stats(adjusted_models_sim1[[i]], c("Protein"),  c("adj.pvalue"), 
+                                              param_combos[i, 1], param_combos[i, 2], param_combos[i, 3])
+  adj_results <- rbindlist(list(adj_results, adj_results_temp))
+  
+  ttest_results_temp <- calculate_summary_stats(ttest_sim1[[i]], c("ptm"), c("pval"), param_combos[i, 1], 
+                                              param_combos[i, 2], param_combos[i, 3])
+  ttest_results <- rbindlist(list(ttest_results, ttest_results_temp))
+  
+  temp <- adj_ttest_sim1[[i]]
+  temp_ttest <- data.table()
+  for (c in seq_along(unique(temp$label))){
+    temp_ttest <- rbindlist(list(temp_ttest, 
+                                 temp %>% filter(label == unique(temp$label)[c]) %>% 
+                                   mutate(adj.pvalue = p.adjust(pval, method = "BH"))))
+  }
+  ttest_adj_results_temp <- calculate_summary_stats(temp_ttest, c("ptm"), c("adj.pvalue"), param_combos[i, 1], 
+                                                param_combos[i, 2], param_combos[i, 3])
+  ttest_adj_results <- rbindlist(list(ttest_adj_results, ttest_adj_results_temp))
+  
+  limma_results_temp <- calculate_summary_stats(limma_results_sim1[[i]], c("PTM"), c("pvalue"), param_combos[i, 1], 
+                                                    param_combos[i, 2], param_combos[i, 3])
+  limma_model_results <- rbindlist(list(limma_model_results, limma_results_temp))
+  
+  temp <- adj_limma_sim1[[i]]
+  temp_limma <- data.table()
+  for (c in seq_along(unique(temp$Label))){
+    temp_limma <- rbindlist(list(temp_limma, 
+                                 temp %>% filter(Label == unique(temp$Label)[c]) %>% 
+                                   mutate(adj.pvalue = p.adjust(pvalue, method = "BH"))))
+  }
+  
+  limma_results_temp <- calculate_summary_stats(temp_limma, c("PTM"), c("adj.pvalue"), param_combos[i, 1], 
+                                                param_combos[i, 2], param_combos[i, 3])
+  limma_adj_model_results <- rbindlist(list(limma_adj_model_results, limma_results_temp))
+}
+
+## Label Models
+adj_results$Model <- "Proposed"
+no_adj_results$Model <- "Proposed no adjustment"
+ttest_results$Model <- "T-Test no adjustment"
+ttest_adj_results$Model <- "T-Test"
+limma_model_results$Model <- "Limma no adjustment"
+limma_adj_model_results$Model <- "Limma"
+
+## Combine to plot
+models <- rbindlist(list(adj_results, no_adj_results, ttest_results, 
+                         ttest_adj_results, limma_model_results, limma_adj_model_results), fill=TRUE)
+
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+cbPalette_first <- c("#E69F00", "#F0E442", "#56B4E9", "#0072B2", "#009E73", "#D55E00", "#CC79A7", "#999999")
+```
+
+#### False Discovery Rate (FDR)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 7, fig.height = 6}
+
+models$plot_conditions = paste0(models$conditions, " Conditions")
+models$plot_sd = paste0("SD ", models$sd)
+models$Replicates = factor(models$rep)
+
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjustment", "Limma", 
+                                               "Limma no adjustment", "T-Test", "T-Test no adjustment")),
+                  ) %>%
+  filter(conditions == 4 & sd == .3 & rep == 5) %>% 
+  ggplot() + geom_col(aes(x = Model, y = fpr, fill = Model)) + #, size = Replicates
+  scale_colour_manual(values=cbPalette_first) +
+  # scale_size_manual(values = c(3,5,7,9)) +
+  # facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  theme_bw() +
+  ylim(0.0, 0.4) + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1, vjust = 1, size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=16),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 1: FDR all models", x = "Model", y = "FDR") + 
+     guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
+              size = guide_legend(order = 2, reverse = TRUE))
+
+```
+
+``` {r, echo = FALSE, message=FALSE, warning=FALSE}
+
+models$plot_conditions = paste0(models$conditions, " Conditions")
+models$plot_sd = paste0("SD ", models$sd)
+
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjustment", "Limma", 
+                                               "Limma no adjustment", "T-Test", "T-Test no adjustment")),
+                  Replicates = as.factor(rep)) %>%
+  filter(Model %in% c("Proposed", "T-Test", "Limma")) %>% 
+  ggplot() + geom_point(aes(x = Model, y = fpr, size = Replicates, color = Model)) + 
+  scale_colour_manual(values=cbPalette) +
+  scale_size_manual(values = c(3,5,7,9)) + 
+  facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust=1, size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 1: FDR adjusted models", x = "Model", y = "FDR") + 
+   guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
+              size = guide_legend(order = 2, reverse = TRUE))
+
+```
+
+#### Recall (TPR)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+models$plot_conditions = paste0(models$conditions, " Conditions")
+models$plot_sd = paste0("SD ", models$sd)
+
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjustment", "Limma", 
+                                               "Limma no adjustment", "T-Test", "T-Test no adjustment")),
+                  Replicates = as.factor(rep)) %>%
+  filter(Model %in% c("Proposed", "T-Test", "Limma")) %>% 
+  ggplot() + geom_point(aes(x = Model, y = recall, size = Replicates, color = Model)) + 
+  scale_colour_manual(values=cbPalette) +
+  scale_size_manual(values = c(3,5,7,9)) + 
+  facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust=1, size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 1: Recall adjusted models", x = "Model", y = "Recall") + 
+   guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
+              size = guide_legend(order = 2, reverse = TRUE))
+```
+
+
+#### Accuracy
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no Adjustment", "Limma", 
+                                               "Limma no Adjustment", "T-Test", "T-Test no Adjustment")),
+                  Replicates = as.factor(rep)) %>%
+  filter(Model %in% c("Proposed", "T-Test", "Limma")) %>% 
+  ggplot() + geom_point(aes(x = Model, y = accuracy, size = Replicates, color = Model)) + 
+  scale_colour_manual(values=cbPalette) +
+  scale_size_manual(values = c(3,5,7,9)) + 
+  facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust=1, size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 1: Accuracy adjusted models", x = "Model", y = "Accuracy") + 
+   guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
+              size = guide_legend(order = 2, reverse = TRUE))
+
+```
+
+
+``` {r, echo = FALSE, fig.width = 10, fig.height = 7}
+
+conds <- c("G_1 vs G_2", "G_2 vs G_3", "G_3 vs G_4")
+cond2 <- c("classCondition_1-classCondition_2",
+"classCondition_2-classCondition_3",
+"classCondition_3-classCondition_4")
+
+boxplot_data <- data.table()
+for (i in seq_len(nrow(param_combos))){
+  temp1 <- adjusted_models_sim1[[i]] %>% filter(!grepl("NoChange", Protein) & Label %in% conds)
+  temp1$Model <- "Proposed"
+  temp1$log2FC <- temp1$log2FC*-1
+  temp2 <- adj_ttest_sim1[[i]] %>% filter(!grepl("NoChange", ptm) & label %in% conds)
+  temp2 <- setNames(temp2, c("ptm", "Label", "pval", "tstat", "SE", "df", "log2FC"))
+  temp2$Model <- "T-test"
+  temp3 <- adj_limma_sim1[[i]] %>% filter(!grepl("NoChange", PTM) & Label %in% cond2) 
+  temp3 <- setNames(temp3, c('PTM', 'Label', 'log2FC', 'pvalue', 'df', 'se'))
+  temp3$Model <- "Limma"
+  temp3$log2FC <- temp3$log2FC*-1
+  
+  temp <- rbindlist(list(temp1, temp2, temp3), fill = TRUE)
+  temp$sd <- param_combos[i, 1]
+  temp$reps <- param_combos[i, 2]
+  temp$cond <- param_combos[i, 3]
+  
+  boxplot_data <- rbindlist(list(boxplot_data, temp))
+}
+
+boxplot_data$plot_conditions = paste0(boxplot_data$cond, " Conditions")
+boxplot_data$plot_sd = paste0("SD ", boxplot_data$sd)
+
+boxplot_data %>% mutate(Model = factor(Model, levels=c("Proposed", "Limma", "T-test")),
+                        reps = factor(reps, levels = c(2,3,5,10))) %>% 
+  ggplot()  + geom_hline(yintercept = .75, color = "red", size = 1.1) + 
+  geom_boxplot(aes(y = log2FC, x = reps, fill = Model)) + 
+  facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  scale_fill_manual(values=cbPalette) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 1: Fold Change Distribution", x = "Replicates", y = "Log2FC")
+```
+
+
+### Simulation 2
+
+In this simulation we introduce missing values into the experiment. 20% of the features simulated were selected at random and masked with an NA value. No missing value imputation was used.
+
+* Mean of log-intensity: $25$
+* Number of Features: $2$ (PTM), $10$ (Protein)
+* Standard deviations of log-intensities for modified and unmodified peptides: $0.2$, $0.3$
+* Difference in PTM abundance between conditions: $0$, $0.75$, $1.5$, $2.25$
+* Difference in protein abundance between conditions: $0$, $0.75$, $1.5$, $2.25$
+* Number of replicates: $2$, $4$, $6$
+* Number of conditions: $2$, $3$, $4$
+* Number of realizations: $1000$
+* 10% of features missing at random in PTM and Protein datasets
+
+```{r, include=FALSE}
+
+load(file = "../data/ptm_models_sim2.rda")#ptm_models_sim2
+load(file = "../data/adjusted_models_sim2.rda")#adjusted_models_sim2
+load(file = "../data/ttest_models_sim2.rda")#ttest_sim2
+load(file = "../data/adj_ttest_models_sim2.rda")#adj_ttest_sim2
+load(file = "../data/limma_models_sim2.rda")#limma_results_sim2
+load(file = "../data/adj_limma_models_sim2.rda")#adj_limma_sim2
+
+s <- c(.2,.3)
+reps <- c(2,3,5,10)
+cond <- c(2,3,4)
+param_combos <- expand.grid(s, reps, cond)
+
+no_adj_results <- data.table()
+adj_results <- data.table()
+ttest_results <- data.table()
+ttest_adj_results <- data.table()
+limma_model_results <- data.table()
+limma_adj_model_results <- data.table()
+
+## Calculate results
+## Calculate metrics for each model and dataset
+for (i in seq_along(ptm_models_sim2)){
+  
+  no_adj_results_temp <- calculate_summary_stats(ptm_models_sim2[[i]], c("Protein"),  c("pvalue"), param_combos[i, 1], 
+                                                 param_combos[i, 2], param_combos[i, 3])
+  no_adj_results <- rbindlist(list(no_adj_results, no_adj_results_temp))
+  
+  adj_results_temp <- calculate_summary_stats(adjusted_models_sim2[[i]], c("Protein"),  c("adj.pvalue"), 
+                                              param_combos[i, 1], param_combos[i, 2], param_combos[i, 3])
+  adj_results <- rbindlist(list(adj_results, adj_results_temp))
+  
+  ttest_results_temp <- calculate_summary_stats(ttest_sim2[[i]], c("ptm"), c("pval"), param_combos[i, 1], 
+                                              param_combos[i, 2], param_combos[i, 3])
+  ttest_results <- rbindlist(list(ttest_results, ttest_results_temp))
+  
+  temp <- adj_ttest_sim2[[i]]
+  temp_ttest <- data.table()
+  for (c in seq_along(unique(temp$label))){
+    temp_ttest <- rbindlist(list(temp_ttest, 
+                                 temp %>% filter(label == unique(temp$label)[c]) %>% 
+                                   mutate(adj.pvalue = p.adjust(pval, method = "BH"))))
+  }
+  ttest_adj_results_temp <- calculate_summary_stats(temp_ttest, c("ptm"), c("adj.pvalue"), param_combos[i, 1], 
+                                                param_combos[i, 2], param_combos[i, 3])
+  ttest_adj_results <- rbindlist(list(ttest_adj_results, ttest_adj_results_temp))
+  
+  limma_results_temp <- calculate_summary_stats(limma_results_sim2[[i]], c("PTM"), c("pvalue"), param_combos[i, 1], 
+                                                    param_combos[i, 2], param_combos[i, 3])
+  limma_model_results <- rbindlist(list(limma_model_results, limma_results_temp))
+  
+  temp <- adj_limma_sim2[[i]]
+  temp_limma <- data.table()
+  for (c in seq_along(unique(temp$Label))){
+    temp_limma <- rbindlist(list(temp_limma, 
+                                 temp %>% filter(Label == unique(temp$Label)[c]) %>% 
+                                   mutate(adj.pvalue = p.adjust(pvalue, method = "BH"))))
+  }
+  
+  limma_results_temp <- calculate_summary_stats(temp_limma, c("PTM"), c("adj.pvalue"), param_combos[i, 1], 
+                                                param_combos[i, 2], param_combos[i, 3])
+  limma_adj_model_results <- rbindlist(list(limma_adj_model_results, limma_results_temp))
+}
+
+## Label Models
+adj_results$Model <- "Proposed"
+no_adj_results$Model <- "Proposed_no_adj"
+ttest_results$Model <- "ttest_no_adj"
+ttest_adj_results$Model <- "T-Test"
+limma_model_results$Model <- "limma_no_adj"
+limma_adj_model_results$Model <- "Limma"
+
+## Combine to plot
+models <- rbindlist(list(adj_results, no_adj_results, ttest_results, 
+                         ttest_adj_results, limma_model_results, limma_adj_model_results), fill=TRUE)
+
+```
+
+#### FDR
+
+``` {r, echo = FALSE, message=FALSE, warning=FALSE}
+models$plot_conditions = paste0(models$conditions, " Conditions")
+models$plot_sd = paste0("SD ", models$sd)
+
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed_no_adj", "limma_no_adj", 
+                                               "Limma", "ttest_no_adj", "T-Test")),
+                  Replicates = as.factor(rep)) %>%
+  filter(Model %in% c("Proposed", "T-Test", "Limma")) %>% 
+  ggplot() + geom_point(aes(x = Model, y = fpr, size = Replicates, color = Model)) + 
+  scale_colour_manual(values=cbPalette) +
+  facet_grid(vars(sd), vars(conditions)) + 
+  theme_bw() +
+  theme(axis.text.x = element_blank(), 
+                                                 axis.text.y = element_text(size = 12), 
+                                                 legend.text=element_text(size=12),
+                                                 axis.title.y = element_text(size = 14),
+                                                 axis.title.x = element_text(size = 14),
+                                                 title = element_text(size = 16),
+                                                 strip.text = element_text(size = 12)) + 
+  labs(title = "FDR adjusted models", x = "Model", y = "FDR")
+```
+
+#### Recall (TPR)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+models$plot_conditions = paste0(models$conditions, " Conditions")
+models$plot_sd = paste0("SD ", models$sd)
+
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed_no_adj", "limma_no_adj", 
+                                               "Limma", "ttest_no_adj", "T-Test")),
+                  Replicates = as.factor(rep)) %>%
+  filter(Model %in% c("Proposed", "T-Test", "Limma")) %>% 
+  ggplot() + geom_point(aes(x = Model, y = recall, size = Replicates, color = Model)) + 
+  scale_colour_manual(values=cbPalette) +
+  scale_size_manual(values = c(3,5,7,9)) + 
+  facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust=1, size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 2: Recall adjusted models", x = "Model", y = "Recall") + 
+   guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
+              size = guide_legend(order = 2, reverse = TRUE))
+
+```
+
+
+#### Accuracy
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed_no_adj", "limma_no_adj", 
+                                               "Limma", "ttest_no_adj", "T-Test")),
+                  Replicates = as.factor(rep)) %>%
+  filter(Model %in% c("Proposed", "T-Test", "Limma")) %>% 
+  ggplot() + geom_point(aes(x = Model, y = accuracy, size = Replicates, color = Model)) + 
+  scale_colour_manual(values=cbPalette) +
+  scale_size_manual(values = c(3,5,7,9)) + 
+  facet_grid(vars(plot_sd), vars(plot_conditions)) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust=1, size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+  labs(title = "Simulation 2: Accuracy adjusted models", x = "Model", y = "Accuracy") + 
+   guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
+              size = guide_legend(order = 2, reverse = TRUE))
+```
+
+
+``` {r, echo = FALSE, fig.width = 10, fig.height = 7, message=FALSE, warning=FALSE}
+
+conds <- c("G_1 vs G_2", "G_2 vs G_3", "G_3 vs G_4")
+cond2 <- c("classCondition_1-classCondition_2",
+"classCondition_2-classCondition_3",
+"classCondition_3-classCondition_4")
+
+boxplot_data <- data.table()
+for (i in seq_len(nrow(param_combos))){
+  temp1 <- adjusted_models_sim2[[i]] %>% filter(!grepl("NoChange", Protein) & Label %in% conds)
+  temp1$Model <- "Proposed"
+  temp1$log2FC <- temp1$log2FC*-1
+  temp2 <- adj_ttest_sim2[[i]] %>% filter(!grepl("NoChange", ptm) & label %in% conds)
+  temp2 <- setNames(temp2, c("ptm", "Label", "pval", "tstat", "SE", "df", "log2FC"))
+  temp2$Model <- "T-test"
+  temp3 <- adj_limma_sim2[[i]] %>% filter(!grepl("NoChange", PTM) & Label %in% cond2) 
+  temp3 <- setNames(temp3, c('PTM', 'Label', 'log2FC', 'pvalue', 'df', 'se'))
+  temp3$Model <- "Limma"
+  temp3$log2FC <- temp3$log2FC*-1
+  
+  temp <- rbindlist(list(temp1, temp2, temp3), fill = TRUE)
+  temp$sd <- param_combos[i, 1]
+  temp$reps <- param_combos[i, 2]
+  temp$cond <- param_combos[i, 3]
+  
+  boxplot_data <- rbindlist(list(boxplot_data, temp))
+}
+
+boxplot_data$plot_conditions = paste0(boxplot_data$cond, " Conditions")
+boxplot_data$plot_sd = paste0("SD ", boxplot_data$sd)
+
+boxplot_data %>% mutate(Model = factor(Model, levels=c("Proposed", "Limma", "T-test")),
+                        reps = factor(reps, levels = c(2,3,5,10))) %>% 
+ggplot()  + geom_hline(yintercept = .75, color = "red", size = 1.1) + 
+geom_boxplot(aes(y = log2FC, x = reps, fill = Model)) + facet_grid(vars(sd), vars(cond)) + 
+    scale_fill_manual(values=cbPalette) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 16), 
+         axis.text.y = element_text(size = 16), 
+         legend.text=element_text(size=18),
+         axis.title.y = element_text(size = 22),
+         axis.title.x = element_text(size = 22),
+         title = element_text(size = 22),
+         strip.text = element_text(size = 16)) + 
+labs(title = "Simulation 2: Fold Change Distribution", x = "Replicates", y = "Log2FC")
+
+
+```
+
