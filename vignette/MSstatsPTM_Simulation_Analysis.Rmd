@@ -172,7 +172,7 @@ cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00",
 cbPalette_first <- c("#56B4E9", "#E69F00", "#009E73", "#56B4E9", "#009E73", "#009E73", "#CC79A7", "#999999")
 ```
 
-#### False Discovery Rate (FDR)
+#### empirical False Discovery Rate (eFDR)
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width = 7, fig.height = 6}
 
@@ -203,7 +203,7 @@ models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstats", "Limma
          axis.title.x = element_text(size = 22),
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
-  labs(title = "Simulation 1: eFDR by Model", x = "Model", y = "FDR") + 
+  labs(title = "Simulation 1: eFDR by Model", x = "Model", y = "eFDR") + 
      guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
               size = guide_legend(order = 2, reverse = TRUE))
 dev.off()
@@ -230,7 +230,7 @@ models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstats", "Limma
          axis.title.x = element_text(size = 22),
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
-  labs(title = "Simulation 1: eFDR adjusted models", x = "Model", y = "FDR") + 
+  labs(title = "Simulation 1: eFDR adjusted models", x = "Model", y = "eFDR") + 
    guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
               size = guide_legend(order = 2, reverse = TRUE))
 
@@ -459,6 +459,7 @@ models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstatsPTM_no_ad
 #### Accuracy
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+png("../../MSstatsPTM-manuscript/main/images/sim3_Accuracy.png", width = 750, height = 500)
 models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstatsPTM_no_adj", "limma_no_adj", 
                                                "Limma", "anova_no_adj", "ANOVA")),
                   Replicates = as.factor(rep)) %>%
@@ -475,9 +476,10 @@ models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstatsPTM_no_ad
          axis.title.x = element_text(size = 22),
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
-  labs(title = "Simulation 2: Accuracy adjusted models", x = "Model", y = "Accuracy") + 
+  labs(title = "Simulation 2: Accuracy of models with adjustment", x = "Model", y = "Accuracy") + 
    guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
               size = guide_legend(order = 2, reverse = TRUE))
+dev.off()
 ```
 
 
