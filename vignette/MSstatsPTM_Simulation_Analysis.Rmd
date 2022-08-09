@@ -145,19 +145,19 @@ for (i in seq_along(ptm_models_sim1)){
 }
 
 ## Label Models
-adj_results$Model <- "Proposed"
-adj_results$Color_Model <- "Proposed"
+adj_results$Model <- "MSstatsPTM"
+adj_results$Color_Model <- "MSstatsPTM"
 adj_results$Adj = TRUE
-no_adj_results$Model <- "Proposed no adjustment"
-no_adj_results$Color_Model <- "Proposed"
+no_adj_results$Model <- "MSstats"
+no_adj_results$Color_Model <- "MSstatsPTM"
 no_adj_results$Adj = FALSE
-anova_results$Model <- "Anova no adjustment"
-anova_results$Color_Model <- "Anova"
+anova_results$Model <- "basic ANOVA"
+anova_results$Color_Model <- "ANOVA"
 anova_results$Adj = FALSE
-anova_adj_results$Model <- "Anova"
-anova_adj_results$Color_Model <- "Anova"
+anova_adj_results$Model <- "ANOVA"
+anova_adj_results$Color_Model <- "ANOVA"
 anova_adj_results$Adj = TRUE
-limma_model_results$Model <- "Limma no adjustment"
+limma_model_results$Model <- "basic Limma"
 limma_model_results$Color_Model <- "Limma"
 limma_model_results$Adj = FALSE
 limma_adj_model_results$Model <- "Limma"
@@ -180,12 +180,14 @@ models$plot_conditions = paste0(models$conditions, " Conditions")
 models$plot_sd = paste0("SD ", models$sd)
 models$Replicates = factor(models$rep)
 
-models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjustment", "Limma", 
-                                               "Limma no adjustment", "Anova", "Anova no adjustment")),
-                  Color_Model = factor(Color_Model, levels=c("Proposed", "Limma", "Anova"))
+png("../../MSstatsPTM-manuscript/main/images/sim1_FDR_all_models.png", width = 750, height = 500)
+models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstats", "Limma", 
+                                               "basic Limma", "ANOVA", "basic ANOVA")),
+                  Color_Model = factor(Color_Model, levels=c("MSstatsPTM", "Limma", "ANOVA"))
                   ) %>%
   filter(conditions == 2 & sd == .2 & rep == 5) %>% 
   ggplot() + geom_col(aes(x = Model, y = fpr, fill = Color_Model, alpha = Adj)) + #, size = Replicates
+  geom_hline(yintercept = .05, linetype = "dashed") + 
   scale_fill_manual(values=cbPalette) +
   scale_alpha_manual(values = c(.5, 1.0)) + 
   # scale_size_manual(values = c(3,5,7,9)) +
@@ -201,10 +203,10 @@ models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjust
          axis.title.x = element_text(size = 22),
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
-  labs(title = "Simulation 1: False Discovery Rate by Model", x = "Model", y = "FDR") + 
+  labs(title = "Simulation 1: eFDR by Model", x = "Model", y = "FDR") + 
      guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
               size = guide_legend(order = 2, reverse = TRUE))
-
+dev.off()
 ```
 
 ``` {r, echo = FALSE, message=FALSE, warning=FALSE}
@@ -212,10 +214,10 @@ models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjust
 models$plot_conditions = paste0(models$conditions, " Conditions")
 models$plot_sd = paste0("SD ", models$sd)
 
-models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjustment", "Limma", 
-                                               "Limma no adjustment", "Anova", "Anova no adjustment")),
+models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstats", "Limma", 
+                                               "basic Limma", "ANOVA", "basic ANOVA")),
                   Replicates = as.factor(rep)) %>%
-  filter(Model %in% c("Proposed", "Anova", "Limma")) %>% 
+  filter(Model %in% c("MSstatsPTM", "Anova", "Limma")) %>% 
   ggplot() + geom_point(aes(x = Model, y = fpr, size = Replicates, color = Model)) + 
   scale_colour_manual(values=cbPalette) +
   scale_size_manual(values = c(3,5,7,9)) + 
@@ -228,7 +230,7 @@ models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjust
          axis.title.x = element_text(size = 22),
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
-  labs(title = "Simulation 1: FDR adjusted models", x = "Model", y = "FDR") + 
+  labs(title = "Simulation 1: eFDR adjusted models", x = "Model", y = "FDR") + 
    guides(color = guide_legend(order = 1, override.aes = list(size=5)), 
               size = guide_legend(order = 2, reverse = TRUE))
 
@@ -245,10 +247,10 @@ Next we will look at the true positive rate, to see how the models perform when 
 models$plot_conditions = paste0(models$conditions, " Conditions")
 models$plot_sd = paste0("SD ", models$sd)
 
-models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjustment", "Limma", 
-                                               "Limma no adjustment", "Anova", "Anova no adjustment")),
+models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstats", "Limma", 
+                                               "basic Limma", "ANOVA", "basic ANOVA")),
                   Replicates = as.factor(rep)) %>%
-  filter(Model %in% c("Proposed", "Anova", "Limma")) %>% 
+  filter(Model %in% c("MSstatsPTM", "Anova", "Limma")) %>% 
   ggplot() + geom_point(aes(x = Model, y = recall, size = Replicates, color = Model)) + 
   scale_colour_manual(values=cbPalette) +
   scale_size_manual(values = c(3,5,7,9)) + 
@@ -270,10 +272,10 @@ models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no adjust
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
-models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed no Adjustment", "Limma", 
-                                               "Limma no Adjustment", "Anova", "Anova no Adjustment")),
+models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstats", "Limma", 
+                                               "basic Limma", "ANOVA", "basic ANOVA")),
                   Replicates = as.factor(rep)) %>%
-  filter(Model %in% c("Proposed", "Anova", "Limma")) %>% 
+  filter(Model %in% c("MSstatsPTM", "Anova", "Limma")) %>% 
   ggplot() + geom_point(aes(x = Model, y = accuracy, size = Replicates, color = Model)) + 
   scale_colour_manual(values=cbPalette) +
   scale_size_manual(values = c(3,5,7,9)) + 
@@ -304,10 +306,10 @@ cond2 <- c("classG_1-classG_2",
 boxplot_data <- data.table()
 for (i in seq_len(nrow(param_combos))){
   temp1 <- adjusted_models_sim1[[i]] %>% filter(!grepl("NoChange", Protein) & Label %in% conds)
-  temp1$Model <- "Proposed"
+  temp1$Model <- "MSstatsPTM"
   temp2 <- adj_anova_sim1[[i]] %>% filter(!grepl("NoChange", ptm) & label %in% conds)
   temp2 <- setNames(temp2, c("ptm", "Label","log2FC", "SE", "tstat", "pval"))
-  temp2$Model <- "Anova"
+  temp2$Model <- "ANOVA"
   temp3 <- adj_limma_sim1[[i]] %>% filter(!grepl("NoChange", PTM) & Label %in% cond2) 
   temp3 <- setNames(temp3, c('PTM', 'Label', 'log2FC', 'pvalue', 'df', 'se'))
   temp3$Model <- "Limma"
@@ -323,7 +325,8 @@ for (i in seq_len(nrow(param_combos))){
 boxplot_data$plot_conditions = paste0(boxplot_data$cond, " Conditions")
 boxplot_data$plot_sd = paste0("SD ", boxplot_data$sd)
 
-boxplot_data %>% mutate(Model = factor(Model, levels=c("Proposed", "Limma", "Anova")),
+png("../../MSstatsPTM-manuscript/supplementary/sim_new/sim1_FC_boxplot.png", width = 750, height = 500)
+boxplot_data %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "Limma", "ANOVA")),
                         reps = factor(reps, levels = c(2,3,5,10))) %>% 
   ggplot()  + geom_hline(yintercept = 1, color = "red", size = 1.1) + 
   geom_boxplot(aes(y = log2FC, x = reps, fill = Model)) + 
@@ -338,6 +341,7 @@ boxplot_data %>% mutate(Model = factor(Model, levels=c("Proposed", "Limma", "Ano
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
   labs(title = "Simulation 1: Fold Change Distribution", x = "Replicates", y = "Log2FC")
+dev.off()
 ```
 
 
@@ -411,10 +415,10 @@ for (i in seq_along(ptm_models_sim2)){
 }
 
 ## Label Models
-adj_results$Model <- "Proposed"
-no_adj_results$Model <- "Proposed_no_adj"
+adj_results$Model <- "MSstatsPTM"
+no_adj_results$Model <- "MSstatsPTM_no_adj"
 anova_results$Model <- "anova_no_adj"
-anova_adj_results$Model <- "Anova"
+anova_adj_results$Model <- "ANOVA"
 limma_model_results$Model <- "limma_no_adj"
 limma_adj_model_results$Model <- "Limma"
 
@@ -430,10 +434,10 @@ models <- rbindlist(list(adj_results, no_adj_results, anova_results,
 models$plot_conditions = paste0(models$conditions, " Conditions")
 models$plot_sd = paste0("SD ", models$sd)
 
-models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed_no_adj", "limma_no_adj", 
-                                               "Limma", "anova_no_adj", "Anova")),
+models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstatsPTM_no_adj", "limma_no_adj", 
+                                               "Limma", "anova_no_adj", "ANOVA")),
                   Replicates = as.factor(rep)) %>%
-  filter(Model %in% c("Proposed", "Anova", "Limma")) %>% 
+  filter(Model %in% c("MSstatsPTM", "ANOVA", "Limma")) %>% 
   ggplot() + geom_point(aes(x = Model, y = recall, size = Replicates, color = Model)) + 
   scale_colour_manual(values=cbPalette) +
   scale_size_manual(values = c(3,5,7,9)) + 
@@ -455,10 +459,10 @@ models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed_no_adj", 
 #### Accuracy
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-models %>% mutate(Model = factor(Model, levels=c("Proposed", "Proposed_no_adj", "limma_no_adj", 
-                                               "Limma", "anova_no_adj", "Anova")),
+models %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "MSstatsPTM_no_adj", "limma_no_adj", 
+                                               "Limma", "anova_no_adj", "ANOVA")),
                   Replicates = as.factor(rep)) %>%
-  filter(Model %in% c("Proposed", "Anova", "Limma")) %>% 
+  filter(Model %in% c("MSstatsPTM", "ANOVA", "Limma")) %>% 
   ggplot() + geom_point(aes(x = Model, y = accuracy, size = Replicates, color = Model)) + 
   scale_colour_manual(values=cbPalette) +
   scale_size_manual(values = c(3,5,7,9)) + 
@@ -487,11 +491,11 @@ cond2 <- c("classG_1-classG_2",
 boxplot_data <- data.table()
 for (i in seq_len(nrow(param_combos))){
   temp1 <- adjusted_models_sim2[[i]] %>% filter(!grepl("NoChange", Protein) & Label %in% conds)
-  temp1$Model <- "Proposed"
+  temp1$Model <- "MSstatsPTM"
   # temp1$log2FC <- temp1$log2FC*-1
   temp2 <- adj_anova_sim2[[i]] %>% filter(!grepl("NoChange", ptm) & label %in% conds)
   temp2 <- setNames(temp2, c("ptm", "Label", "log2FC", "SE", "tstat", "pval"))
-  temp2$Model <- "Anova"
+  temp2$Model <- "ANOVA"
   temp3 <- adj_limma_sim2[[i]] %>% filter(!grepl("NoChange", PTM) & Label %in% cond2) 
   temp3 <- setNames(temp3, c('PTM', 'Label', 'log2FC', 'pvalue', 'df', 'SE'))
   temp3$Model <- "Limma"
@@ -508,7 +512,8 @@ for (i in seq_len(nrow(param_combos))){
 boxplot_data$plot_conditions = paste0(boxplot_data$cond, " Conditions")
 boxplot_data$plot_sd = paste0("SD ", boxplot_data$sd)
 
-boxplot_data %>% mutate(Model = factor(Model, levels=c("Proposed", "Limma", "Anova")),
+png("../../MSstatsPTM-manuscript/supplementary/sim_new/sim3_FC_boxplot.png", width = 750, height = 500)
+boxplot_data %>% mutate(Model = factor(Model, levels=c("MSstatsPTM", "Limma", "ANOVA")),
                         reps = factor(reps, levels = c(2,3,5,10))) %>% 
 ggplot()  + geom_hline(yintercept = 1, color = "red", size = 1.1) + 
 geom_boxplot(aes(y = log2FC, x = reps, fill = Model)) + facet_grid(vars(sd), vars(cond)) + 
@@ -522,7 +527,7 @@ geom_boxplot(aes(y = log2FC, x = reps, fill = Model)) + facet_grid(vars(sd), var
          title = element_text(size = 22),
          strip.text = element_text(size = 16)) + 
 labs(title = "Simulation 2: Fold Change Distribution", x = "Replicates", y = "Log2FC")
-
+dev.off()
 
 ```
 
